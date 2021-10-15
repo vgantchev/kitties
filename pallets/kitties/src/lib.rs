@@ -11,6 +11,22 @@ use sp_std::result::Result;
 
 pub use pallet::*;
 
+#[derive(Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+pub enum KittyGender {
+  Male,
+  Female,
+}
+
+impl Kitty {
+  pub fn gender(&self) -> KittyGender {
+    if self.0[0] % 2 == 0 {
+      KittyGender::Male
+    } else {
+      KittyGender::Female
+    }
+  }
+}
+
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Kitty(pub [u8; 16]);
 
@@ -43,8 +59,16 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		/// A kitty is created. \[owner, kitty_id, kitty\]
-		KittyCreated(T::AccountId, u32, Kitty)
+		KittyCreated(T::AccountId, u32, Kitty),
+    /// A kitten is bred /[owner, kitty_id, kitty\]
+    KittyBred(T::AccountId, u32, Kitty),
 	}
+
+  #[pallet::error]
+  pub enum Error<T> {
+    InvalidKittyId,
+    SameGender,
+  }
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -78,7 +102,41 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+    /// Breed kitties
+    #[pallet::weight(1000)]
+    pub fn breed(origin: OriginFor<T>, kitty_id_1: u32, kitty_id_2: u32) -> DispatchResult {
+      let sender = ensure_signed(origin)?;
+      let kitty1 = Self::kitties(&sender, kitty_id_1).ok_or(Error::<T>::InvalidKittyId)?;
+      let kitty2 = Self::kitties(&sender, kitty_id_2).ok_or(Error::<T>::InvalidKittyId)?;
+
+      ensure!(kitty1.gender() != kitty2.gender(), Error::<T>::SameGender);
+
+			let kitty_id = Self::get_next_kitty_id()?;
+      let kitty1_dna = kitty1.0;
+      let kitty2_dna = kitty2.0;
+
+      let selector = Self::random_value(&sender);
+      let mut new_dna = [0u8; 16];
+
+      // Combine parents and selector to breed kitty
+      for i in 0..kitty1_dna.len() {
+        new_dna[i] = combine_dna(kitty1_dna[i], kitty2_dna[i], selector[i]);
+      }
+
+      let new_kitty = Kitty(new_dna);
+      
+      Kitties::<T>::insert(&sender, kitty_id, &new_kitty);
+      
+      Self::deposit_event(Event::KittyBred(sender, kitty_id, new_kitty));
+
+      Ok(())
+    }
 	}
+}
+
+fn combine_dna(dna1: u8, dna2: u8, selector: u8) -> u8 {
+  // TODO
 }
 
 impl<T: Config> Pallet<T> {
@@ -89,5 +147,10 @@ impl<T: Config> Pallet<T> {
 
       Ok(current_id)
     })
+  }
+
+  fn random_value(sender: &T::AccountId) -> [u8; 16] {
+    // TODO: Implement
+    Default::default()
   }
 }
