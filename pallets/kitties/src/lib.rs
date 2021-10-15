@@ -5,7 +5,7 @@ use frame_support::{
 	traits::Randomness,
 };
 use frame_system::pallet_prelude::*;
-
+use sp_runtime::ArithmeticError;
 use sp_io::hashing::blake2_128;
 pub use pallet::*;
 
@@ -58,6 +58,9 @@ pub mod pallet {
 
 			// TODO: ensure kitty id does not overflow
 			// return Err(ArithmeticError::Overflow.into());
+      if Self::next_kitty_id() == u32::MAX {
+        return Err(ArithmeticError::Overflow.into());
+      }
 
 			// Generate a random 128bit value
 			let payload = (
