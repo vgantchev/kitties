@@ -7,6 +7,8 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 use sp_runtime::ArithmeticError;
 use sp_io::hashing::blake2_128;
+use sp_std::result::Result;
+
 pub use pallet::*;
 
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -56,12 +58,6 @@ pub mod pallet {
 		pub fn create(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			// TODO: ensure kitty id does not overflow
-			// return Err(ArithmeticError::Overflow.into());
-      if Self::next_kitty_id() == u32::MAX {
-        return Err(ArithmeticError::Overflow.into());
-      }
-
 			// Generate a random 128bit value
 			let payload = (
 				<pallet_randomness_collective_flip::Pallet<T> as Randomness<T::Hash, T::BlockNumber>>::random_seed().0,
@@ -72,7 +68,8 @@ pub mod pallet {
 
 			// Create and store kitty
 			let kitty = Kitty(dna);
-			let kitty_id = Self::next_kitty_id();
+			let kitty_id = Self::get_next_kitty_id()?;
+
 			Kitties::<T>::insert(&sender, kitty_id, kitty.clone());
 			NextKittyId::<T>::put(kitty_id + 1);
 
@@ -82,4 +79,15 @@ pub mod pallet {
 			Ok(())
 		}
 	}
+}
+
+impl<T: Config> Pallet<T> {
+  fn get_next_kitty_id() -> Result<u32, DispatchError> {
+    NextKittyId::<T>::try_mutate(|next_id| -> Result<u32, DispatchError> {
+      let current_id = *next_id;
+      *next_id = next_id.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+
+      Ok(current_id)
+    })
+  }
 }
