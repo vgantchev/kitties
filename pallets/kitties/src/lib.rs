@@ -37,6 +37,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_randomness_collective_flip::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+    type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 	}
 
 	/// Stores all the kitties. Key is (user, kitty_id).
@@ -81,14 +82,7 @@ pub mod pallet {
 		#[pallet::weight(1000)]
 		pub fn create(origin: OriginFor<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			// Generate a random 128bit value
-			let payload = (
-				<pallet_randomness_collective_flip::Pallet<T> as Randomness<T::Hash, T::BlockNumber>>::random_seed().0,
-				&sender,
-				<frame_system::Pallet<T>>::extrinsic_index(),
-			);
-			let dna = payload.using_encoded(blake2_128);
+			let dna = Self::random_value(&sender);
 
 			// Create and store kitty
 			let kitty = Kitty(dna);
@@ -136,7 +130,7 @@ pub mod pallet {
 }
 
 fn combine_dna(dna1: u8, dna2: u8, selector: u8) -> u8 {
-  // TODO
+  (!selector & dna1) | (selector & dna2)
 }
 
 impl<T: Config> Pallet<T> {
@@ -150,7 +144,11 @@ impl<T: Config> Pallet<T> {
   }
 
   fn random_value(sender: &T::AccountId) -> [u8; 16] {
-    // TODO: Implement
-    Default::default()
+    let payload = (
+			T::Randomness::random_seed().0,
+			&sender,
+			<frame_system::Pallet<T>>::extrinsic_index(),
+		);
+		payload.using_encoded(blake2_128)
   }
 }
